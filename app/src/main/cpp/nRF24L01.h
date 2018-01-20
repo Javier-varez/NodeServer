@@ -97,6 +97,8 @@ public:
     nRF24L01(std::string CE, std::string INT, std::string CS, std::string SPI);
     ~nRF24L01();
     bool init();
+    int setMode(nRF24L01_Mode mode);
+    void applyIRQMask(uint8_t mask);
 
 private:
     APeripheralManagerClient *mClient;
@@ -106,11 +108,11 @@ private:
     ASpiDevice *mSpiDev;
     nRF24L01_Data mConfiguration;
 
+    bool powerUp();
     bool writeRegister(uint8_t reg, uint8_t data);
-    bool writeRegister(uint8_t reg, std::array<uint8_t, ADDR_LENGTH> &data);
+    bool writeRegister(uint8_t reg, const std::array<uint8_t, ADDR_LENGTH> &data);
     bool sendCommand(uint8_t command);
     uint8_t readRegister(uint8_t reg);
-    bool powerUp();
 };
 
 #endif //NODESERVER_NRF24L01_H

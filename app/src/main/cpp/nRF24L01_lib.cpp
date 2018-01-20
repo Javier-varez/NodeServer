@@ -56,3 +56,16 @@ Java_com_noosrequired_javier_1varez_nodeserver_MainDisplay_nRF24L01Init(
     }
 }
 
+extern "C"
+JNIEXPORT void
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_MainDisplay_nRF24L01SetMode(
+        JNIEnv *env,
+        jobject /* this */,
+        jint mode) {
+
+    if (device != nullptr) {
+        device->setMode((mode == 0) ? TRANSMITTER : RECEIVER);
+    }
+}

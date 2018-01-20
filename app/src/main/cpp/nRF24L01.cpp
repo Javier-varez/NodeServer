@@ -99,6 +99,47 @@ bool nRF24L01::init() {
     return true;
 }
 
+int nRF24L01::setMode(nRF24L01_Mode mode) {
+    mConfiguration.mode = mode;
+
+    uint8_t config_reg = readRegister(CONFIG);
+    if (mode == TRANSMITTER) {
+        config_reg &= ~CONFIG_PRIM_RX;
+        applyIRQMask(MASK_RX_DR | MASK_MAX_RT);
+    }
+    else if (mode == RECEIVER) {
+        config_reg |= CONFIG_PRIM_RX;
+        applyIRQMask(MASK_TX_DS | MASK_MAX_RT);
+    }
+
+    return writeRegister(CONFIG, config_reg);
+}
+
+bool nRF24L01::powerUp() {
+    // Power up
+    writeRegister(CONFIG, readRegister(CONFIG) | CONFIG_PWR_UP);
+
+    // Delay more than 2ms to provide powerup
+    struct timespec delay = {
+            .tv_sec = 0,
+            .tv_nsec = 4*1000*1000
+    };
+    nanosleep(&delay, nullptr);
+
+    return true;
+}
+
+void nRF24L01::applyIRQMask(uint8_t mask) {
+    // Config IRQ Mask
+    uint8_t data = readRegister(CONFIG);
+
+    // Apply mask
+    data &= ~(MASK_RX_DR | MASK_TX_DS | MASK_MAX_RT);
+    data |= mask;
+
+    writeRegister(CONFIG, data);
+}
+
 bool nRF24L01::writeRegister(uint8_t reg, uint8_t data) {
     bool rc = false;
     AGpio_setValue(mCS, 0);
@@ -111,7 +152,7 @@ bool nRF24L01::writeRegister(uint8_t reg, uint8_t data) {
     return rc;
 }
 
-bool nRF24L01::writeRegister(uint8_t reg, std::array<uint8_t , ADDR_LENGTH> &data) {
+bool nRF24L01::writeRegister(uint8_t reg, const std::array<uint8_t , ADDR_LENGTH> &data) {
     bool rc = false;
     AGpio_setValue(mCS, 0);
 
@@ -134,18 +175,4 @@ uint8_t nRF24L01::readRegister(uint8_t reg) {
     }
     AGpio_setValue(mCS, 1);
     return value;
-}
-
-bool nRF24L01::powerUp() {
-    // Power up
-    writeRegister(CONFIG, readRegister(CONFIG) | CONFIG_PWR_UP);
-
-    // Delay more than 2ms to provide powerup
-    struct timespec delay = {
-            .tv_sec = 0,
-            .tv_nsec = 4*1000*1000
-    };
-    nanosleep(&delay, nullptr);
-
-    return true;
 }
