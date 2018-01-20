@@ -13,4 +13,10 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 #define ASSERT(cond, ...) if (!(cond)) { __android_log_assert(#cond, TAG, __VA_ARGS__);}
 
+#define IMPLEMENT() { \
+                        std::string pattern ("Implement: "); \
+                        std::string func (__func__); \
+                        ASSERT(0, (pattern + func).c_str()); \
+                    }
+
 #endif //NODESERVER_LOG_H

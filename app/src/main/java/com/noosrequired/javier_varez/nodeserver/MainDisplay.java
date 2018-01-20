@@ -25,7 +25,7 @@ public class MainDisplay extends Activity {
         AsyncTask.execute(new Runnable() {
             @Override
             public void run() {
-                nRF24L01Create("BCM7", "BCM25", "SPI0.0");
+                nRF24L01Create("BCM7", "BCM25", "", "SPI0.0");
             }
         });
     }
@@ -36,6 +36,6 @@ public class MainDisplay extends Activity {
         nRF24L01Destroy();
     }
 
-    public native boolean nRF24L01Create(String CE, String Int, String SpiDevice);
+    public native boolean nRF24L01Create(String CE, String Int, String CS, String SpiDevice);
     public native void nRF24L01Destroy();
 }

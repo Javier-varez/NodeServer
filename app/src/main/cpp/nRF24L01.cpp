@@ -1,79 +1,12 @@
 #include "nRF24L01.h"
 
-#include <pio/peripheral_manager_client.h>
-#include <pio/gpio.h>
-#include <pio/spi_device.h>
+#include <time.h>
 
 #include "log.h"
+
 #define TAG "nRF24L01_CPP"
 
-// Commands
-
-#define		R_REGISTER			0x00
-#define 	W_REGISTER			0x20
-#define 	R_RX_PAYLOAD		0x61
-#define 	W_TX_PAYLOAD		0xA0
-#define 	FLUSH_TX			0xE1
-#define 	FLUSH_RX			0xE2
-#define		REUSE_TX_PL			0xE3
-#define		ACTIVATE			0x50
-#define		R_RX_PL_WID			0x60
-#define		W_ACK_PAYLOAD		0xA8
-#define 	W_TX_PAYLOAD_NO ACK	0xB0
-#define		NOP					0xFF
-
-// Registers
-
-#define 	CONFIG				0x00
-#define 	EN_AA				0x01
-#define 	EN_RXADDR			0x02
-#define 	SETUP_AW			0x03
-#define 	SETUP_RETR			0x04
-#define		RF_CH				0x05
-#define		RF_SETUP			0x06
-#define 	STATUS				0x07
-#define		OBSERVE_TX			0x08
-#define 	CD					0x09
-#define 	RX_ADDR_P0			0x0A
-#define 	RX_ADDR_P1			0x0B
-#define 	RX_ADDR_P2			0x0C
-#define 	RX_ADDR_P3			0x0D
-#define 	RX_ADDR_P4			0x0E
-#define 	RX_ADDR_P5			0x0F
-#define 	TX_ADDR				0x10
-#define 	RX_PW_P0			0x11
-#define		RX_PW_P1			0x12
-#define		RX_PW_P2			0x13
-#define		RX_PW_P3			0x14
-#define		RX_PW_P4			0x15
-#define		RX_PW_P5			0x16
-#define		FIFO_STATUS			0x17
-#define		DYNPD				0x1C
-#define		FEATURE				0x1D
-
-// Bit definitions
-#define 	CONFIG_PRIM_RX		0x01
-#define 	CONFIG_PWR_UP		0x02
-#define 	CONFIG_EN_CRC		0x08
-
-#define		MASK_RX_DR			0x40
-#define		MASK_TX_DS			0x20
-#define		MASK_MAX_RT			0x10
-
-#define 	RF_SETUP_RF_DR		0x08
-#define 	RF_SETUP_LNA_HCURR	0x01
-
-#define 	STATUS_RX_DR		0x40
-#define 	STATUS_TX_DS		0x20
-#define 	STATUS_MAX_RT		0x10
-
-#define		RX_EMPTY			0x01
-
-#define 	ADDR_LENGTH			5
-
-
-
-nRF24L01::nRF24L01(std::string CE, std::string INT, std::string SPI) {
+nRF24L01::nRF24L01(std::string CE, std::string INT, std::string CS, std::string SPI) {
     mClient = APeripheralManagerClient_new();
     ASSERT(mClient, "Failed to open mClient");
 
@@ -92,20 +25,127 @@ nRF24L01::nRF24L01(std::string CE, std::string INT, std::string SPI) {
     ASSERT(AGpio_setEdgeTriggerType(mInt, AGPIO_EDGE_RISING) == 0,
            "Failed to set the mInt edge trigger type");
 
+    APeripheralManagerClient_openGpio(mClient, CS.c_str(), &mCS);
+    ASSERT(mCS, "Failed to open GPIO mCS");
+
+    ASSERT(AGpio_setDirection(mCS, AGPIO_DIRECTION_OUT_INITIALLY_HIGH) == 0,
+           "Failed to set mCS direction");
+
     APeripheralManagerClient_openSpiDevice(mClient, SPI.c_str(), &mSpiDev);
     ASSERT(mSpiDev, "Failed to open mSpiDev");
 
     ASSERT(ASpiDevice_setMode(mSpiDev, ASPI_MODE0) == 0,
            "Failed to set Spi mode");
-    ASSERT(ASpiDevice_setCsChange(mSpiDev, 1) == 0,
+    ASSERT(ASpiDevice_setCsChange(mSpiDev, 0) == 0,
            "Failed to set Spi Cs Change");
-
-
-
 }
 
 nRF24L01::~nRF24L01() {
     AGpio_delete(mCE);
     AGpio_delete(mInt);
+    AGpio_delete(mCS);
     ASpiDevice_delete(mSpiDev);
+}
+
+bool nRF24L01::init() {
+    // Set chip enable low
+    AGpio_setValue(mCE, 0);
+
+    // Wait POR just in case
+    struct timespec delay = {
+            .tv_sec = 0,
+            .tv_nsec = 20*1000*1000
+    };
+    nanosleep(&delay, nullptr);
+
+    // Power up, set mode, enable CRC (1 byte)
+    writeRegister(CONFIG, CONFIG_EN_CRC | mConfiguration.mode);
+
+    // Setup automatic retransmission to 1500us delay to allow 32 bytes payloads
+    writeRegister(SETUP_RETR, 0x4f);
+
+    // Configure channel
+    writeRegister(RF_CH, mConfiguration.channel);
+
+    // Configure PA
+    writeRegister(RF_SETUP, (mConfiguration.output_power << 1) | RF_SETUP_LNA_HCURR);
+
+    // Configure TX address
+    writeRegister(TX_ADDR, mConfiguration.addr);
+
+    // Configure RX address (PIPE 0)
+    writeRegister(RX_ADDR_P0, mConfiguration.addr);
+
+    // Configure RX payload size
+    writeRegister(RX_PW_P0, 32);
+
+    // Disable AutoACK
+    writeRegister(EN_AA, 0x00);
+
+    writeRegister(EN_RXADDR, 0x01);
+
+    AGpio_setValue(mCS, 0);
+    sendCommand(FLUSH_TX);
+    AGpio_setValue(mCS, 1);
+
+    AGpio_setValue(mCS, 0);
+    sendCommand(FLUSH_RX);
+    AGpio_setValue(mCS, 1);
+
+    writeRegister(STATUS, STATUS_RX_DR | STATUS_TX_DS | STATUS_MAX_RT);
+
+    powerUp();
+
+    return true;
+}
+
+bool nRF24L01::writeRegister(uint8_t reg, uint8_t data) {
+    bool rc = false;
+    AGpio_setValue(mCS, 0);
+
+    if (sendCommand(W_REGISTER | reg) == true) {
+        rc = ASpiDevice_writeBuffer(mSpiDev, &data, 1) == 0;
+    }
+    AGpio_setValue(mCS, 1);
+
+    return rc;
+}
+
+bool nRF24L01::writeRegister(uint8_t reg, std::array<uint8_t , ADDR_LENGTH> &data) {
+    bool rc = false;
+    AGpio_setValue(mCS, 0);
+
+    if (sendCommand(W_REGISTER | reg) == true) {
+        rc = ASpiDevice_writeBuffer(mSpiDev, data.begin(), 1) == 0;
+    }
+    AGpio_setValue(mCS, 1);
+
+    return rc;}
+
+bool nRF24L01::sendCommand(uint8_t command) {
+    return ASpiDevice_writeBuffer(mSpiDev, &command, 1) == 0;
+}
+
+uint8_t nRF24L01::readRegister(uint8_t reg) {
+    uint8_t value = 0;
+    AGpio_setValue(mCS, 0);
+    if (sendCommand(R_REGISTER | reg) == true) {
+        value = ASpiDevice_readBuffer(mSpiDev, &value, 1);
+    }
+    AGpio_setValue(mCS, 1);
+    return value;
+}
+
+bool nRF24L01::powerUp() {
+    // Power up
+    writeRegister(CONFIG, readRegister(CONFIG) | CONFIG_PWR_UP);
+
+    // Delay more than 2ms to provide powerup
+    struct timespec delay = {
+            .tv_sec = 0,
+            .tv_nsec = 4*1000*1000
+    };
+    nanosleep(&delay, nullptr);
+
+    return true;
 }

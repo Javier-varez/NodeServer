@@ -13,6 +13,7 @@ Java_com_noosrequired_javier_1varez_nodeserver_MainDisplay_nRF24L01Create(
         jobject /* this */,
         jstring CE,
         jstring INT,
+        jstring CS,
         jstring SPI) {
 
     if (device != nullptr) {
@@ -22,6 +23,7 @@ Java_com_noosrequired_javier_1varez_nodeserver_MainDisplay_nRF24L01Create(
     device = new nRF24L01(
             env->GetStringUTFChars(CE, JNI_FALSE),
             env->GetStringUTFChars(INT, JNI_FALSE),
+            env->GetStringUTFChars(CS, JNI_FALSE),
             env->GetStringUTFChars(SPI, JNI_FALSE));
 
     return (device != nullptr) ? JNI_TRUE : JNI_FALSE;
@@ -40,3 +42,17 @@ Java_com_noosrequired_javier_1varez_nodeserver_MainDisplay_nRF24L01Destroy(
         device = nullptr;
     }
 }
+
+extern "C"
+JNIEXPORT void
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_MainDisplay_nRF24L01Init(
+        JNIEnv *env,
+        jobject /* this */) {
+
+    if (device != nullptr) {
+        device->init();
+    }
+}
+
