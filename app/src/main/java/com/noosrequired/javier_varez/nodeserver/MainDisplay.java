@@ -29,7 +29,6 @@ public class MainDisplay extends Activity {
             public void run() {
                 nRF24L01Create("BCM7", "BCM25", "", "SPI0.0");
                 nRF24L01Init();
-
                 nRF24L01SetMode(RECEIVER);
             }
         });
