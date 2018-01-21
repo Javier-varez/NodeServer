@@ -97,7 +97,15 @@ public:
     nRF24L01(std::string CE, std::string INT, std::string CS, std::string SPI);
     ~nRF24L01();
     bool init();
-    int setMode(nRF24L01_Mode mode);
+    bool setMode(nRF24L01_Mode mode);
+    bool transmit(uint8_t *payload);
+    bool pollForRXPacket();
+    bool pollForRXPacketWithTimeout(uint32_t timeout_ms);
+    bool pollForTXPacket();
+    bool writePayload(uint8_t *buf, uint8_t len);
+    bool readPayload(uint8_t *buf, uint8_t len);
+
+    void clearIRQ(uint8_t irq);
     void applyIRQMask(uint8_t mask);
 
 private:

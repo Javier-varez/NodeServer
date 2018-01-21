@@ -1,7 +1,5 @@
 #include "nRF24L01.h"
-
 #include <time.h>
-
 #include "log.h"
 
 #define TAG "nRF24L01_CPP"
@@ -99,7 +97,7 @@ bool nRF24L01::init() {
     return true;
 }
 
-int nRF24L01::setMode(nRF24L01_Mode mode) {
+bool nRF24L01::setMode(nRF24L01_Mode mode) {
     mConfiguration.mode = mode;
 
     uint8_t config_reg = readRegister(CONFIG);
@@ -115,6 +113,108 @@ int nRF24L01::setMode(nRF24L01_Mode mode) {
     return writeRegister(CONFIG, config_reg);
 }
 
+bool nRF24L01::transmit(uint8_t *payload) {
+    bool rc = 0;
+    rc = writePayload(payload, 32); // 32 bytes payload
+    AGpio_setValue(mCE, 1);
+    struct timespec delay = {
+            .tv_sec = 0,
+            .tv_nsec = 1*1000*1000
+    };
+    nanosleep(&delay, nullptr);
+    AGpio_setValue(mCE, 0);
+
+    return rc;
+}
+
+bool nRF24L01::pollForRXPacket() {
+    uint8_t status = 0;
+    bool rc = false;
+
+    AGpio_setValue(mCE, 1);
+
+    while (!(status & STATUS_RX_DR)) {
+        status = readRegister(STATUS);
+    }
+
+    // Clear IT flag by writing 1
+    rc = writeRegister(STATUS, STATUS_RX_DR);
+
+    AGpio_setValue(mCE, 0);
+    return rc;
+}
+
+bool nRF24L01::pollForRXPacketWithTimeout(uint32_t timeout_ms) {
+    bool rc = false;
+    uint8_t reg = 0x00;
+
+    // CHECK IF Flag is already active
+    reg = readRegister(STATUS);
+    if (reg & STATUS_RX_DR)
+        return true;
+
+    // Else, wait for IRQ
+    clearIRQ(STATUS_RX_DR);
+    // Start receiving
+    AGpio_setValue(mCE, 1);
+
+    xSemaphoreTake(module->IRQ_Semaphore, timeout_ms/portTICK_RATE_MS);
+
+    // Received IRQ, check for STATUS_RX_DR FLAG
+    reg = readRegister(STATUS);
+    if (reg & STATUS_RX_DR)
+        rc = true;
+
+    // Enter Standby
+    AGpio_setValue(mCE, 0);
+
+    return rc;
+}
+
+
+bool nRF24L01::pollForTXPacket() {
+    uint8_t status = 0;
+    bool rc = 0;
+    while (!(status & STATUS_TX_DS)) {
+        status = readRegister(STATUS);
+    }
+
+    // Clear IT flag by writing 1
+    status = STATUS_TX_DS;
+    rc = writeRegister(STATUS, STATUS_TX_DS);
+    return rc;
+}
+
+bool nRF24L01::writePayload(uint8_t *buf, uint8_t len) {
+    uint8_t rc = 0;
+    AGpio_setValue(mCS, 0);
+
+    if (sendCommand(W_TX_PAYLOAD) == 0) {
+        rc = writeData(buf, len);
+    }
+    AGpio_setValue(mCS, 1);
+
+    return rc;
+}
+
+bool nRF24L01::readPayload(uint8_t *buf, uint8_t len) {
+    bool rc = 0;
+    AGpio_setValue(mCS, 1);
+
+    if (sendCommand(R_RX_PAYLOAD) == 0) {
+        rc = readData(buf, len);
+    }
+    AGpio_setValue(mCS, 1);
+
+    // Clear flag if fifo is already empty
+    uint8_t reg;
+    reg = readRegister(FIFO_STATUS);
+    if (reg & RX_EMPTY)
+        clearIRQ(STATUS_RX_DR);
+
+    return rc;
+}
+
 bool nRF24L01::powerUp() {
     // Power up
     writeRegister(CONFIG, (uint8_t) (readRegister(CONFIG) | CONFIG_PWR_UP));
@@ -127,6 +227,13 @@ bool nRF24L01::powerUp() {
     nanosleep(&delay, nullptr);
 
     return true;
+}
+
+void nRF24L01::clearIRQ(uint8_t irq) {
+    xSemaphoreTake(module->IRQ_Semaphore, 0); // Just in case there is a pending semaphore
+
+    // Clear status reg
+    writeRegister(STATUS, irq);
 }
 
 void nRF24L01::applyIRQMask(uint8_t mask) {
@@ -161,7 +268,8 @@ bool nRF24L01::writeRegister(uint8_t reg, const std::array<uint8_t , ADDR_LENGTH
     }
     AGpio_setValue(mCS, 1);
 
-    return rc;}
+    return rc;
+}
 
 bool nRF24L01::sendCommand(uint8_t command) {
     return ASpiDevice_writeBuffer(mSpiDev, &command, 1) == 0;
