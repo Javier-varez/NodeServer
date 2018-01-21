@@ -59,7 +59,7 @@ bool nRF24L01::init() {
     nanosleep(&delay, nullptr);
 
     // Power up, set mode, enable CRC (1 byte)
-    writeRegister(CONFIG, CONFIG_EN_CRC | mConfiguration.mode);
+    writeRegister(CONFIG, (uint8_t) CONFIG_EN_CRC | mConfiguration.mode);
 
     // Setup automatic retransmission to 1500us delay to allow 32 bytes payloads
     writeRegister(SETUP_RETR, 0x4f);
@@ -117,7 +117,7 @@ int nRF24L01::setMode(nRF24L01_Mode mode) {
 
 bool nRF24L01::powerUp() {
     // Power up
-    writeRegister(CONFIG, readRegister(CONFIG) | CONFIG_PWR_UP);
+    writeRegister(CONFIG, (uint8_t) (readRegister(CONFIG) | CONFIG_PWR_UP));
 
     // Delay more than 2ms to provide powerup
     struct timespec delay = {
@@ -144,7 +144,7 @@ bool nRF24L01::writeRegister(uint8_t reg, uint8_t data) {
     bool rc = false;
     AGpio_setValue(mCS, 0);
 
-    if (sendCommand(W_REGISTER | reg) == true) {
+    if (sendCommand((uint8_t)(W_REGISTER | reg))) {
         rc = ASpiDevice_writeBuffer(mSpiDev, &data, 1) == 0;
     }
     AGpio_setValue(mCS, 1);
@@ -156,7 +156,7 @@ bool nRF24L01::writeRegister(uint8_t reg, const std::array<uint8_t , ADDR_LENGTH
     bool rc = false;
     AGpio_setValue(mCS, 0);
 
-    if (sendCommand(W_REGISTER | reg) == true) {
+    if (sendCommand((uint8_t)(W_REGISTER | reg))) {
         rc = ASpiDevice_writeBuffer(mSpiDev, data.begin(), 1) == 0;
     }
     AGpio_setValue(mCS, 1);
@@ -170,8 +170,8 @@ bool nRF24L01::sendCommand(uint8_t command) {
 uint8_t nRF24L01::readRegister(uint8_t reg) {
     uint8_t value = 0;
     AGpio_setValue(mCS, 0);
-    if (sendCommand(R_REGISTER | reg) == true) {
-        value = ASpiDevice_readBuffer(mSpiDev, &value, 1);
+    if (sendCommand((uint8_t)(R_REGISTER | reg))) {
+        value = ASpiDevice_readBuffer(mSpiDev, &value, 1) == 0;
     }
     AGpio_setValue(mCS, 1);
     return value;
