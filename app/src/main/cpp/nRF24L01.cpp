@@ -72,6 +72,7 @@ bool nRF24L01::init() {
 
     // Configure PA
     setOutputPower(DEFAULT_OUT_POWER);
+    setDataRate(DEFAULT_DATA_RATE);
 
     // Configure address
     setAddress(DEFAULT_ADDRESS);
@@ -94,7 +95,7 @@ bool nRF24L01::init() {
     AGpio_setValue(mCS, 1);
 
     // Clear Status register
-    writeRegister(STATUS, STATUS_RX_DR | STATUS_TX_DS | STATUS_MAX_RT);
+    clearIRQ(STATUS_RX_DR | STATUS_TX_DS | STATUS_MAX_RT);
 
     powerUp();
 
@@ -158,7 +159,7 @@ bool nRF24L01::pollForRXPacketWithTimeout(int timeout_ms) {
                 .tv_usec = (timeout_ms % 1000) * 1000
         };
 
-        select(intFd, &readSet, NULL, NULL, &timeout);
+        select(intFd+1, &readSet, NULL, NULL, &timeout);
     } else {
         return false;
     }
@@ -206,7 +207,7 @@ bool nRF24L01::pollForTXPacketWithTimeout(int timeout_ms) {
                 .tv_usec = (timeout_ms % 1000) * 1000
         };
 
-        select(intFd, &readSet, NULL, NULL, &timeout);
+        select(intFd+1, &readSet, NULL, NULL, &timeout);
     } else {
         return false;
     }
@@ -287,11 +288,11 @@ bool nRF24L01::setMode(nRF24L01_Mode mode) {
     uint8_t config_reg = readRegister(CONFIG);
     if (mode == TRANSMITTER) {
         config_reg &= ~CONFIG_PRIM_RX;
-        applyIRQMask(MASK_RX_DR);
+        applyIRQMask(MASK_RX_DR | MASK_MAX_RT);
     }
     else if (mode == RECEIVER) {
         config_reg |= CONFIG_PRIM_RX;
-        applyIRQMask(MASK_TX_DS);
+        applyIRQMask(MASK_TX_DS | MASK_MAX_RT);
     }
 
     return writeRegister(CONFIG, config_reg);
@@ -299,7 +300,16 @@ bool nRF24L01::setMode(nRF24L01_Mode mode) {
 
 void nRF24L01::setOutputPower(nRF24L01_PA output_power) {
     mConfiguration.output_power = output_power;
-    writeRegister(RF_SETUP, (mConfiguration.output_power << 1) | RF_SETUP_LNA_HCURR);
+    uint8_t reg = readRegister(RF_SETUP);
+    reg &= ~(RF_SETUP_LNA_PWRM);
+    writeRegister(RF_SETUP, (mConfiguration.output_power << 1) | RF_SETUP_LNA_HCURR | reg);
+};
+
+void nRF24L01::setDataRate(nRF24L01_DR dr) {
+    mConfiguration.data_rate = dr;
+    uint8_t reg = readRegister(RF_SETUP);
+    reg &= ~(RF_SETUP_RF_DR);
+    writeRegister(RF_SETUP, mConfiguration.data_rate | RF_SETUP_LNA_HCURR | reg);
 };
 
 void nRF24L01::setChannel(uint8_t channel) {
@@ -331,6 +341,10 @@ nRF24L01_CRC nRF24L01::getCRC() {
 
 nRF24L01_PA nRF24L01::getOutputPower() {
     return mConfiguration.output_power;
+}
+
+nRF24L01_DR nRF24L01::getDataRate() {
+    return mConfiguration.data_rate;
 }
 
 uint8_t nRF24L01::getChannel() {

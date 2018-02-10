@@ -27,6 +27,25 @@ public class nRF24L01 {
         }
     }
 
+    public enum dataRate {
+        _1Mbps(0),
+        _2Mbps(0x08),
+        INVALID_DR(0xFF);
+
+        int mIndex;
+        dataRate(int index) {
+            mIndex = index;
+        }
+
+        boolean equals(mode m) {
+            return this.mIndex == m.mIndex;
+        }
+
+        int getDataRate() {
+            return mIndex;
+        }
+    }
+
     public enum mode {
         RECEIVER(1),
         TRANSMITTER(0),
@@ -86,11 +105,13 @@ public class nRF24L01 {
     private native void nRF24L01PollForTXPacketWithTimeout(int timeout_ms);
     private native void nRF24L01SetMode(int mode);
     private native void nRF24L01SetOutputPower(int outputPower);
+    private native void nRF24L01SetDataRate(int dataRate);
     private native void nRF24L01SetChannel(int channel);
     private native void nRF24L01SetAddress(byte [] address);
     private native void nRF24L01SetCRC(byte crc);
     private native int nRF24L01GetMode();
     private native int nRF24L01GetOutputPower();
+    private native int nRF24L01GetDataRate();
     private native int nRF24L01GetChannel();
     private native byte[] nRF24L01GetAddress();
     private native int nRF24L01GetCRC();
@@ -106,12 +127,37 @@ public class nRF24L01 {
         nRF24L01Init();
     }
 
+    public void transmit(byte [] data) {
+        nRF24L01Transmit(data);
+    }
+
+    public void receive(byte [] data) {
+        nRF24L01Receive(data);
+    }
+
+    public void pollForRXPacket() {
+        nRF24L01PollForRXPacket();
+    }
+    public void pollForTXPacket() {
+        nRF24L01PollForTXPacket();
+    }
+    public void pollForRXPacketWithTimeout(int timeout_ms) {
+        nRF24L01PollForRXPacketWithTimeout(timeout_ms);
+    }
+    public void pollForTXPacket(int timeout_ms) {
+        nRF24L01PollForTXPacketWithTimeout(timeout_ms);
+    }
+
     public void setMode(mode m) {
         nRF24L01SetMode(m.getMode());
     }
 
     public void setOutputPower(outputPower power) {
         nRF24L01SetOutputPower(power.getOutputPower());
+    }
+
+    public void setDataRate(dataRate rate) {
+        nRF24L01SetDataRate(rate.getDataRate());
     }
 
     public void setChannel(int channel) {
@@ -144,6 +190,16 @@ public class nRF24L01 {
             }
         }
         return outputPower.INVALID_PA;
+    }
+
+    public dataRate getDataRate() {
+        int index = nRF24L01GetDataRate();
+        for (dataRate rate: dataRate.values()) {
+            if (index == rate.getDataRate()) {
+                return rate;
+            }
+        }
+        return dataRate.INVALID_DR;
     }
 
     public int getChannel() {
@@ -191,4 +247,5 @@ public class nRF24L01 {
     public void destroy() {
         nRF24L01Destroy();
     }
+
 }

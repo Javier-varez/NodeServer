@@ -173,6 +173,20 @@ Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01SetOutputPower(
 }
 
 extern "C"
+JNIEXPORT void
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01SetDataRate(
+        JNIEnv *env,
+        jobject /* this */,
+        jint data_rate) {
+
+    if (device != nullptr) {
+        device->setDataRate((nRF24L01_DR) data_rate);
+    }
+}
+
+extern "C"
 JNIEXPORT jint
 
 JNICALL
@@ -245,6 +259,20 @@ Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01GetOutputPower(
         return device->getOutputPower();
     }
     return INVALID_PA;
+}
+
+extern "C"
+JNIEXPORT jint
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01GetDataRate(
+        JNIEnv *env,
+        jobject /* this */) {
+
+    if (device != nullptr) {
+        return device->getDataRate();
+    }
+    return INVALID_DR;
 }
 
 extern "C"

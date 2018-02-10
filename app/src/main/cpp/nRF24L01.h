@@ -60,6 +60,9 @@
 #define     MASK_TX_DS          0x20
 #define     MASK_MAX_RT         0x10
 
+#define     RF_SETUP_RF_DR      0x08
+#define     RF_SETUP_LNA_PWRM   0x06
+#define     RF_SETUP_LNA_HCURR  0x01
 
 #define     STATUS_RX_DR        0x40
 #define     STATUS_TX_DS        0x20
@@ -70,8 +73,9 @@
 // Default configuration
 #define     ADDR_LENGTH         5
 #define     PAYLOAD_SIZE        32
-#define     DEFAULT_CHANNEL     2
+#define     DEFAULT_CHANNEL     24
 #define     DEFAULT_OUT_POWER   m0dBm
+#define     DEFAULT_DATA_RATE   _1Mbps
 #define     DEFAULT_ADDRESS     {0xE7, 0xE7, 0xE7, 0xE7, 0xE7}
 #define     DEFAULT_PAYLOAD     32
 #define     DEFAULT_MODE        RECEIVER
@@ -99,12 +103,19 @@ typedef enum {
     INVALID_CRC = 0xFF
 } nRF24L01_CRC;
 
+typedef enum {
+    _1Mbps = 0,
+    _2Mbps = RF_SETUP_RF_DR,
+    INVALID_DR = 0xFF
+} nRF24L01_DR;
+
 typedef struct {
     nRF24L01_Mode mode;
     nRF24L01_PA output_power;
     uint8_t channel; // Must be between 0 an 125 (for 1 MHz Bandwidth)
     std::array<uint8_t, ADDR_LENGTH> addr;
     nRF24L01_CRC crc;
+    nRF24L01_DR data_rate;
 } nRF24L01_Data;
 
 
@@ -126,6 +137,7 @@ public:
     bool setMode(nRF24L01_Mode mode);
     void setCRC(nRF24L01_CRC crc_mode);
     void setOutputPower(nRF24L01_PA output_power);
+    void setDataRate(nRF24L01_DR data_rate);
     void setChannel(uint8_t channel);
     void setAddress(std::array<uint8_t, ADDR_LENGTH> addr);
 
@@ -133,6 +145,7 @@ public:
     nRF24L01_Mode getMode();
     nRF24L01_CRC getCRC();
     nRF24L01_PA getOutputPower();
+    nRF24L01_DR getDataRate();
     uint8_t getChannel();
     std::array<uint8_t, ADDR_LENGTH> getAddress();
 
