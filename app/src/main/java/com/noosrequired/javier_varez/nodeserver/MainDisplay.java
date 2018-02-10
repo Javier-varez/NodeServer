@@ -26,6 +26,7 @@ public class MainDisplay extends Activity {
                 comms_dev.init();
                 comms_dev.setMode(nRF24L01.mode.RECEIVER);
                 comms_dev.setOutputPower(nRF24L01.outputPower.m0dBm);
+                comms_dev.applyIRQMask(nRF24L01.IRQ.RX_DATA_READY);
             }
         });
 

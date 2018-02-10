@@ -173,6 +173,20 @@ Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01SetOutputPower(
 }
 
 extern "C"
+JNIEXPORT jint
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01SetCRC(
+        JNIEnv *env,
+        jobject /* this */,
+        jbyte crc) {
+
+    if (device != nullptr) {
+        device->setCRC((nRF24L01_CRC) crc);
+    }
+}
+
+extern "C"
 JNIEXPORT void
 
 JNICALL
@@ -202,5 +216,106 @@ Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01SetAddress(
                 { {addr[0], addr[1], addr[2], addr[3], addr[4]} };
 
         device->setAddress(array);
+    }
+}
+
+extern "C"
+JNIEXPORT jint
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01GetMode(
+        JNIEnv *env,
+        jobject /* this */) {
+
+    if (device != nullptr) {
+        return device->getMode();
+    }
+    return INVALID_MODE;
+}
+
+extern "C"
+JNIEXPORT jint
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01GetOutputPower(
+        JNIEnv *env,
+        jobject /* this */) {
+
+    if (device != nullptr) {
+        return device->getOutputPower();
+    }
+    return INVALID_PA;
+}
+
+extern "C"
+JNIEXPORT jint
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01GetCRC(
+        JNIEnv *env,
+        jobject /* this */) {
+
+    if (device != nullptr) {
+        return device->getCRC();
+    }
+    return INVALID_CRC;
+}
+
+extern "C"
+JNIEXPORT jbyteArray
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01GetAddress(
+        JNIEnv *env,
+        jobject /* this */) {
+
+    if (device != nullptr) {
+        std::array<uint8_t, ADDR_LENGTH> address = device->getAddress();
+        jbyteArray jaddress= env->NewByteArray(ADDR_LENGTH);
+        env->SetByteArrayRegion(jaddress, 0, ADDR_LENGTH, (jbyte*)address.data());
+        return jaddress;
+    }
+    return nullptr;
+}
+
+extern "C"
+JNIEXPORT jbyte
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01GetChannel(
+        JNIEnv *env,
+        jobject /* this */) {
+
+    if (device != nullptr) {
+        return device->getChannel();
+    }
+    return 0x00;
+}
+
+extern "C"
+JNIEXPORT void
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01ClearIRQ(
+        JNIEnv *env,
+        jobject /* this */,
+        jbyte IRQ) {
+
+    if (device != nullptr) {
+        device->clearIRQ((uint8_t)IRQ);
+    }
+}
+
+extern "C"
+JNIEXPORT void
+
+JNICALL
+Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01ApplyIRQMask(
+        JNIEnv *env,
+        jobject /* this */,
+        jbyte mask) {
+
+    if (device != nullptr) {
+        device->applyIRQMask((uint8_t)mask);
     }
 }

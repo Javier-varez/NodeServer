@@ -36,6 +36,10 @@ nRF24L01::nRF24L01(std::string CE, std::string INT, std::string CS, std::string 
            "Failed to set Spi mode");
     ASSERT(ASpiDevice_setCsChange(mSpiDev, 0) == 0,
            "Failed to set Spi Cs Change");
+
+    mConfiguration.mode = INVALID_MODE;
+    mConfiguration.output_power = INVALID_PA;
+    mConfiguration.crc = INVALID_CRC;
 }
 
 nRF24L01::~nRF24L01() {
@@ -56,8 +60,9 @@ bool nRF24L01::init() {
     };
     nanosleep(&delay, nullptr);
 
-    // Power up, set mode, enable CRC (1 byte)
-    writeRegister(CONFIG, (uint8_t) CONFIG_EN_CRC | mConfiguration.mode);
+    // Set mode, enable CRC (1 byte)
+    setCRC(DEFAULT_CRC_MODE);
+    setMode(DEFAULT_MODE);
 
     // Setup automatic retransmission to 1500us delay to allow 32 bytes payloads
     writeRegister(SETUP_RETR, 0x4f);
@@ -308,6 +313,33 @@ void nRF24L01::setAddress(std::array<uint8_t, ADDR_LENGTH> addr) {
     writeRegister(RX_ADDR_P0, mConfiguration.addr);
 }
 
+void nRF24L01::setCRC(nRF24L01_CRC crc_mode) {
+    mConfiguration.crc = crc_mode;
+    uint8_t config = readRegister(CONFIG);
+    config &= ~(CONFIG_EN_CRC | CONFIG_CRC0);
+    config |= crc_mode;
+    writeRegister(CONFIG, config);
+}
+
+nRF24L01_Mode nRF24L01::getMode() {
+    return mConfiguration.mode;
+}
+
+nRF24L01_CRC nRF24L01::getCRC() {
+    return mConfiguration.crc;
+}
+
+nRF24L01_PA nRF24L01::getOutputPower() {
+    return mConfiguration.output_power;
+}
+
+uint8_t nRF24L01::getChannel() {
+    return mConfiguration.channel;
+}
+
+std::array<uint8_t, ADDR_LENGTH> nRF24L01::getAddress() {
+    return mConfiguration.addr;
+};
 
 bool nRF24L01::writeRegister(uint8_t reg, uint8_t data) {
     bool rc = false;
