@@ -187,7 +187,7 @@ Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01SetDataRate(
 }
 
 extern "C"
-JNIEXPORT jint
+JNIEXPORT void
 
 JNICALL
 Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01SetCRC(
