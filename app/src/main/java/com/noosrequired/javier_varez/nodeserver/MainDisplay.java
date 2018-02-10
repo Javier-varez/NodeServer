@@ -8,13 +8,8 @@ import android.widget.TextView;
 
 public class MainDisplay extends Activity {
 
-    static {
-        System.loadLibrary("nRF24L01_lib");
-    }
-    public final int RECEIVER = 1;
-    public final int TRANSMITTER = 0;
-
     static String TAG = "MainDisplay";
+    nRF24L01 comms_dev = new nRF24L01();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -27,21 +22,21 @@ public class MainDisplay extends Activity {
         AsyncTask.execute(new Runnable() {
             @Override
             public void run() {
-                nRF24L01Create("BCM7", "BCM25", "", "SPI0.0");
-                nRF24L01Init();
-                nRF24L01SetMode(RECEIVER);
+                comms_dev.create("BCM7", "BCM25", "BCM24", "SPI0.0");
+                comms_dev.init();
+                comms_dev.setMode(nRF24L01.mode.RECEIVER);
+                comms_dev.setOutputPower(nRF24L01.outputPower.m0dBm);
             }
         });
+
+        Log.d(TAG, "Hola!");
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        nRF24L01Destroy();
+        comms_dev.destroy();
     }
 
-    public native boolean nRF24L01Create(String CE, String Int, String CS, String SpiDevice);
-    public native void nRF24L01Init();
-    public native void nRF24L01SetMode(int Mode);
-    public native void nRF24L01Destroy();
+
 }

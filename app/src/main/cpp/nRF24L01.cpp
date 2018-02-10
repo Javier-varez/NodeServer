@@ -63,23 +63,21 @@ bool nRF24L01::init() {
     writeRegister(SETUP_RETR, 0x4f);
 
     // Configure channel
-    writeRegister(RF_CH, mConfiguration.channel);
+    setChannel(DEFAULT_CHANNEL);
 
     // Configure PA
-    writeRegister(RF_SETUP, (mConfiguration.output_power << 1) | RF_SETUP_LNA_HCURR);
+    setOutputPower(DEFAULT_OUT_POWER);
 
-    // Configure TX address
-    writeRegister(TX_ADDR, mConfiguration.addr);
-
-    // Configure RX address (PIPE 0)
-    writeRegister(RX_ADDR_P0, mConfiguration.addr);
+    // Configure address
+    setAddress(DEFAULT_ADDRESS);
 
     // Configure RX payload size
-    writeRegister(RX_PW_P0, 32);
+    writeRegister(RX_PW_P0, DEFAULT_PAYLOAD);
 
     // Disable AutoACK
     writeRegister(EN_AA, 0x00);
 
+    // Enable data pipe 0
     writeRegister(EN_RXADDR, 0x01);
 
     AGpio_setValue(mCS, 0);
@@ -90,6 +88,7 @@ bool nRF24L01::init() {
     sendCommand(FLUSH_RX);
     AGpio_setValue(mCS, 1);
 
+    // Clear Status register
     writeRegister(STATUS, STATUS_RX_DR | STATUS_TX_DS | STATUS_MAX_RT);
 
     powerUp();
@@ -97,29 +96,15 @@ bool nRF24L01::init() {
     return true;
 }
 
-bool nRF24L01::setMode(nRF24L01_Mode mode) {
-    mConfiguration.mode = mode;
-
-    uint8_t config_reg = readRegister(CONFIG);
-    if (mode == TRANSMITTER) {
-        config_reg &= ~CONFIG_PRIM_RX;
-        applyIRQMask(MASK_RX_DR | MASK_MAX_RT);
-    }
-    else if (mode == RECEIVER) {
-        config_reg |= CONFIG_PRIM_RX;
-        applyIRQMask(MASK_TX_DS | MASK_MAX_RT);
-    }
-
-    return writeRegister(CONFIG, config_reg);
-}
-
 bool nRF24L01::transmit(uint8_t *payload) {
     bool rc = 0;
     rc = writePayload(payload, 32); // 32 bytes payload
     AGpio_setValue(mCE, 1);
+
+    // 15 us delay for transmission of a single packet
     struct timespec delay = {
             .tv_sec = 0,
-            .tv_nsec = 1*1000*1000
+            .tv_nsec = 15*1000
     };
     nanosleep(&delay, nullptr);
     AGpio_setValue(mCE, 0);
@@ -144,7 +129,7 @@ bool nRF24L01::pollForRXPacket() {
     return rc;
 }
 
-bool nRF24L01::pollForRXPacketWithTimeout(uint32_t timeout_ms) {
+bool nRF24L01::pollForRXPacketWithTimeout(int timeout_ms) {
     bool rc = false;
     uint8_t reg = 0x00;
 
@@ -158,7 +143,20 @@ bool nRF24L01::pollForRXPacketWithTimeout(uint32_t timeout_ms) {
     // Start receiving
     AGpio_setValue(mCE, 1);
 
-    xSemaphoreTake(module->IRQ_Semaphore, timeout_ms/portTICK_RATE_MS);
+    int intFd = -1;
+    if (AGpio_getPollingFd(mInt, &intFd) == 0) {
+        fd_set readSet;
+        FD_SET(intFd, &readSet);
+
+        struct timeval timeout = {
+                .tv_sec = timeout_ms / 1000,
+                .tv_usec = (timeout_ms % 1000) * 1000
+        };
+
+        select(intFd, &readSet, NULL, NULL, &timeout);
+    } else {
+        return false;
+    }
 
     // Received IRQ, check for STATUS_RX_DR FLAG
     reg = readRegister(STATUS);
@@ -185,12 +183,45 @@ bool nRF24L01::pollForTXPacket() {
     return rc;
 }
 
+bool nRF24L01::pollForTXPacketWithTimeout(int timeout_ms) {
+    // CHECK IF Flag is already active
+    if (readRegister(STATUS) & STATUS_TX_DS) {
+        clearIRQ(STATUS_TX_DS);
+        return 1;
+    }
+
+    // Wait for IRQ and check if it corresponds to TX event
+    int intFd = -1;
+    if (AGpio_getPollingFd(mInt, &intFd) == 0) {
+        fd_set readSet;
+        FD_SET(intFd, &readSet);
+
+        struct timeval timeout = {
+                .tv_sec = timeout_ms / 1000,
+                .tv_usec = (timeout_ms % 1000) * 1000
+        };
+
+        select(intFd, &readSet, NULL, NULL, &timeout);
+    } else {
+        return false;
+    }
+
+    if (readRegister(STATUS) & STATUS_TX_DS) {
+        // Clear IT flag by writing 1
+        writeRegister(STATUS, STATUS_TX_DS);
+        return  1;
+    }
+
+    return 0;
+}
+
+
 bool nRF24L01::writePayload(uint8_t *buf, uint8_t len) {
     uint8_t rc = 0;
     AGpio_setValue(mCS, 0);
 
     if (sendCommand(W_TX_PAYLOAD) == 0) {
-        rc = writeData(buf, len);
+        rc = ASpiDevice_writeBuffer(mSpiDev, (void*) buf, len) == 0;
     }
     AGpio_setValue(mCS, 1);
 
@@ -202,7 +233,7 @@ bool nRF24L01::readPayload(uint8_t *buf, uint8_t len) {
     AGpio_setValue(mCS, 1);
 
     if (sendCommand(R_RX_PAYLOAD) == 0) {
-        rc = readData(buf, len);
+        rc = ASpiDevice_readBuffer(mSpiDev, (void*) buf, len) == 0;
     }
     AGpio_setValue(mCS, 1);
 
@@ -230,8 +261,6 @@ bool nRF24L01::powerUp() {
 }
 
 void nRF24L01::clearIRQ(uint8_t irq) {
-    xSemaphoreTake(module->IRQ_Semaphore, 0); // Just in case there is a pending semaphore
-
     // Clear status reg
     writeRegister(STATUS, irq);
 }
@@ -246,6 +275,39 @@ void nRF24L01::applyIRQMask(uint8_t mask) {
 
     writeRegister(CONFIG, data);
 }
+
+bool nRF24L01::setMode(nRF24L01_Mode mode) {
+    mConfiguration.mode = mode;
+
+    uint8_t config_reg = readRegister(CONFIG);
+    if (mode == TRANSMITTER) {
+        config_reg &= ~CONFIG_PRIM_RX;
+        applyIRQMask(MASK_RX_DR);
+    }
+    else if (mode == RECEIVER) {
+        config_reg |= CONFIG_PRIM_RX;
+        applyIRQMask(MASK_TX_DS);
+    }
+
+    return writeRegister(CONFIG, config_reg);
+}
+
+void nRF24L01::setOutputPower(nRF24L01_PA output_power) {
+    mConfiguration.output_power = output_power;
+    writeRegister(RF_SETUP, (mConfiguration.output_power << 1) | RF_SETUP_LNA_HCURR);
+};
+
+void nRF24L01::setChannel(uint8_t channel) {
+    mConfiguration.channel = channel;
+    writeRegister(RF_CH, mConfiguration.channel);
+}
+
+void nRF24L01::setAddress(std::array<uint8_t, ADDR_LENGTH> addr) {
+    mConfiguration.addr = addr;
+    writeRegister(TX_ADDR, mConfiguration.addr);
+    writeRegister(RX_ADDR_P0, mConfiguration.addr);
+}
+
 
 bool nRF24L01::writeRegister(uint8_t reg, uint8_t data) {
     bool rc = false;

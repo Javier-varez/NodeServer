@@ -70,6 +70,12 @@
 #define		RX_EMPTY			0x01
 
 #define 	ADDR_LENGTH			5
+#define     PAYLOAD_SIZE        32
+
+#define     DEFAULT_CHANNEL     2
+#define     DEFAULT_OUT_POWER   m0dBm
+#define     DEFAULT_ADDRESS     {0xE7, 0xE7, 0xE7, 0xE7, 0xE7}
+#define     DEFAULT_PAYLOAD     32
 
 typedef enum {
     TRANSMITTER = 0x00,
@@ -97,13 +103,18 @@ public:
     nRF24L01(std::string CE, std::string INT, std::string CS, std::string SPI);
     ~nRF24L01();
     bool init();
-    bool setMode(nRF24L01_Mode mode);
     bool transmit(uint8_t *payload);
     bool pollForRXPacket();
-    bool pollForRXPacketWithTimeout(uint32_t timeout_ms);
+    bool pollForRXPacketWithTimeout(int timeout_ms);
     bool pollForTXPacket();
+    bool pollForTXPacketWithTimeout(int timeout_ms);
     bool writePayload(uint8_t *buf, uint8_t len);
     bool readPayload(uint8_t *buf, uint8_t len);
+
+    bool setMode(nRF24L01_Mode mode);
+    void setOutputPower(nRF24L01_PA output_power);
+    void setChannel(uint8_t channel);
+    void setAddress(std::array<uint8_t, ADDR_LENGTH> addr);
 
     void clearIRQ(uint8_t irq);
     void applyIRQMask(uint8_t mask);
