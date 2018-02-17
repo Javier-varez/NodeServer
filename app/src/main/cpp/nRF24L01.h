@@ -161,6 +161,7 @@ private:
     nRF24L01_Data mConfiguration;
 
     bool powerUp();
+    bool powerDown();
     bool writeRegister(uint8_t reg, uint8_t data);
     bool writeRegister(uint8_t reg, const std::array<uint8_t, ADDR_LENGTH> &data);
     bool sendCommand(uint8_t command);

@@ -95,10 +95,35 @@ public class nRF24L01 {
         }
     }
 
+    public static class Payload {
+        private byte mAddress;
+        private byte mPID;
+        private byte mData[];
+
+        Payload(byte [] array) {
+            mAddress = array[0];
+            mPID = array[1];
+            mData = new byte[array.length - 2];
+            System.arraycopy(mData, 0, array, 2, mData.length);
+        }
+
+        public byte getAddress() {
+            return mAddress;
+        }
+
+        public byte getPID() {
+            return mPID;
+        }
+
+        public byte [] getData() {
+            return mData;
+        }
+    }
+
     private native boolean nRF24L01Create(String CE, String Int, String CS, String SpiDevice);
     private native void nRF24L01Init();
     private native void nRF24L01Transmit(byte [] array);
-    private native void nRF24L01Receive(byte [] array);
+    private native byte [] nRF24L01Receive();
     private native void nRF24L01PollForRXPacket();
     private native void nRF24L01PollForTXPacket();
     private native void nRF24L01PollForRXPacketWithTimeout(int timeout_ms);
@@ -131,8 +156,8 @@ public class nRF24L01 {
         nRF24L01Transmit(data);
     }
 
-    public void receive(byte [] data) {
-        nRF24L01Receive(data);
+    public byte [] receive() {
+        return nRF24L01Receive();
     }
 
     public void pollForRXPacket() {

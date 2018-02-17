@@ -1,4 +1,5 @@
 #include "nRF24L01.h"
+#include <stdlib.h>
 #include <time.h>
 #include "log.h"
 
@@ -36,6 +37,8 @@ nRF24L01::nRF24L01(std::string CE, std::string INT, std::string CS, std::string 
            "Failed to set Spi mode");
     ASSERT(ASpiDevice_setCsChange(mSpiDev, 0) == 0,
            "Failed to set Spi Cs Change");
+    ASSERT(ASpiDevice_setFrequency(mSpiDev, 1000000) == 0,
+           "Failed to set Spi Bus Frequency");
 
     mConfiguration.mode = INVALID_MODE;
     mConfiguration.output_power = INVALID_PA;
@@ -52,6 +55,9 @@ nRF24L01::~nRF24L01() {
 bool nRF24L01::init() {
     // Set chip enable low
     AGpio_setValue(mCE, 0);
+    AGpio_setValue(mCS, 1);
+
+    powerDown();
 
     // Wait POR just in case
     struct timespec delay = {
@@ -62,6 +68,7 @@ bool nRF24L01::init() {
 
     // Set mode, enable CRC (1 byte)
     setCRC(DEFAULT_CRC_MODE);
+    uint8_t config = readRegister(CONFIG);
     setMode(DEFAULT_MODE);
 
     // Setup automatic retransmission to 1500us delay to allow 32 bytes payloads
@@ -236,10 +243,10 @@ bool nRF24L01::writePayload(uint8_t *buf, uint8_t len) {
 
 bool nRF24L01::readPayload(uint8_t *buf, uint8_t len) {
     bool rc = 0;
-    AGpio_setValue(mCS, 1);
+    AGpio_setValue(mCS, 0);
 
     if (sendCommand(R_RX_PAYLOAD) == 0) {
-        rc = ASpiDevice_readBuffer(mSpiDev, (void*) buf, len) == 0;
+        rc = ASpiDevice_readBuffer(mSpiDev, (void*) buf, PAYLOAD_SIZE) == 0;
     }
     AGpio_setValue(mCS, 1);
 
@@ -257,6 +264,20 @@ bool nRF24L01::powerUp() {
     writeRegister(CONFIG, (uint8_t) (readRegister(CONFIG) | CONFIG_PWR_UP));
 
     // Delay more than 2ms to provide powerup
+    struct timespec delay = {
+            .tv_sec = 0,
+            .tv_nsec = 4*1000*1000
+    };
+    nanosleep(&delay, nullptr);
+
+    return true;
+}
+
+bool nRF24L01::powerDown() {
+    // Power Down
+    writeRegister(CONFIG, (uint8_t) (readRegister(CONFIG) & ~CONFIG_PWR_UP));
+
+    // Delay more than 2ms to provide powerDown
     struct timespec delay = {
             .tv_sec = 0,
             .tv_nsec = 4*1000*1000
@@ -288,11 +309,11 @@ bool nRF24L01::setMode(nRF24L01_Mode mode) {
     uint8_t config_reg = readRegister(CONFIG);
     if (mode == TRANSMITTER) {
         config_reg &= ~CONFIG_PRIM_RX;
-        applyIRQMask(MASK_RX_DR | MASK_MAX_RT);
+        //applyIRQMask(MASK_RX_DR | MASK_MAX_RT);
     }
     else if (mode == RECEIVER) {
         config_reg |= CONFIG_PRIM_RX;
-        applyIRQMask(MASK_TX_DS | MASK_MAX_RT);
+        //applyIRQMask(MASK_TX_DS | MASK_MAX_RT);
     }
 
     return writeRegister(CONFIG, config_reg);
@@ -387,7 +408,7 @@ uint8_t nRF24L01::readRegister(uint8_t reg) {
     uint8_t value = 0;
     AGpio_setValue(mCS, 0);
     if (sendCommand((uint8_t)(R_REGISTER | reg))) {
-        value = ASpiDevice_readBuffer(mSpiDev, &value, 1) == 0;
+        ASpiDevice_readBuffer(mSpiDev, &value, 1);
     }
     AGpio_setValue(mCS, 1);
     return value;

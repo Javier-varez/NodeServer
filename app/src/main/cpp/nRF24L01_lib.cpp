@@ -1,5 +1,5 @@
 #include <jni.h>
-
+#include <string.h>
 #include "nRF24L01.h"
 
 static nRF24L01 *device = nullptr;
@@ -71,17 +71,25 @@ Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01Transmit(
 }
 
 extern "C"
-JNIEXPORT void
+JNIEXPORT jbyteArray
 
 JNICALL
 Java_com_noosrequired_javier_1varez_nodeserver_nRF24L01_nRF24L01Receive(
         JNIEnv *env,
-        jobject /* this */,
-        jbyteArray array) {
+        jobject /* this */) {
+
+    jbyte byte_array[PAYLOAD_SIZE];
+    jbyteArray java_array = env->NewByteArray(PAYLOAD_SIZE);
+    if (java_array == NULL) return NULL;
+
+    memset(byte_array, 0, sizeof(byte_array));
 
     if (device != nullptr) {
-        device->readPayload((uint8_t*) env->GetByteArrayElements(array, JNI_FALSE), PAYLOAD_SIZE);
+        device->readPayload((uint8_t*) byte_array, PAYLOAD_SIZE);
     }
+
+    env->SetByteArrayRegion(java_array, 0, PAYLOAD_SIZE, byte_array);
+    return java_array;
 }
 
 extern "C"

@@ -6,6 +6,8 @@ import android.os.Bundle;
 import android.util.Log;
 import android.widget.TextView;
 
+import java.util.Arrays;
+
 public class MainDisplay extends Activity {
 
     static String TAG = "MainDisplay";
@@ -28,16 +30,23 @@ public class MainDisplay extends Activity {
                 comms_dev.setChannel(24);
                 comms_dev.setDataRate(nRF24L01.dataRate._1Mbps);
                 comms_dev.setOutputPower(nRF24L01.outputPower.m0dBm);
-                nRF24L01.IRQ [] mask =
-                        new nRF24L01.IRQ[] {nRF24L01.IRQ.TX_DATA_SENT, nRF24L01.IRQ.TX_MAX_RT};
-                comms_dev.clearIRQ(nRF24L01.IRQ.RX_DATA_READY);
-                comms_dev.applyIRQMask(mask);
                 Log.d(TAG, "Device Configured!");
-                comms_dev.pollForRXPacket();
+                while (true) {
+                    comms_dev.setMode(nRF24L01.mode.RECEIVER);
+                    comms_dev.pollForRXPacket();
+                    nRF24L01.Payload packet = new nRF24L01.Payload(comms_dev.receive());
+                    Log.d(TAG, "Addr = " + packet.getAddress() + " PID " + packet.getPID() +
+                            " Payload" + Arrays.toString(packet.getData()));
 
-                byte [] payload = new byte[32];
-                comms_dev.receive(payload);
-                Log.d(TAG, "Payload" + payload.toString());
+                    byte ack[] = new byte[32];
+                    ack[2] = 'A';
+                    ack[3] = 'C';
+                    ack[4] = 'K';
+                    comms_dev.setMode(nRF24L01.mode.TRANSMITTER);
+                    comms_dev.transmit(ack);
+                    comms_dev.pollForTXPacket();
+                    Log.d(TAG, "ACK Sent");
+                }
             }
         });
 
